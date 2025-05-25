@@ -8,12 +8,15 @@ import {
   Timestamp,
   serverTimestamp,
   Unsubscribe,
-  limit
+  limit,
+  where,
+  getDocs
 } from "firebase/firestore";
 import { db } from "./config";
 import type { Message, UserProfile } from "@/types";
 
 const MESSAGES_COLLECTION = "messages";
+const USERS_COLLECTION = "users";
 
 export async function sendMessage(
   text: string,
@@ -63,4 +66,39 @@ export function getMessagesSubscription(
   );
 
   return unsubscribe;
+}
+
+export async function searchUsersByUsername(
+  searchTerm: string,
+  currentUserId: string,
+  searchLimit: number = 10
+): Promise<UserProfile[]> {
+  if (!searchTerm.startsWith("@") || searchTerm.length < 2) {
+    // Basic validation: require '@' and at least one character after it.
+    return [];
+  }
+  
+  const usersRef = collection(db, USERS_COLLECTION);
+  // Query for usernames that start with the searchTerm
+  // \uf8ff is a high Unicode character that acts as an upper bound for string prefix searches
+  const q = query(
+    usersRef,
+    where("username", ">=", searchTerm),
+    where("username", "<=", searchTerm + "\uf8ff"),
+    limit(searchLimit)
+  );
+
+  try {
+    const querySnapshot = await getDocs(q);
+    const users: UserProfile[] = [];
+    querySnapshot.forEach((doc) => {
+      if (doc.id !== currentUserId) { // Exclude current user from results
+        users.push({ uid: doc.id, ...doc.data() } as UserProfile);
+      }
+    });
+    return users;
+  } catch (error) {
+    console.error("Error searching users by username:", error);
+    throw new Error("Failed to search for users.");
+  }
 }
