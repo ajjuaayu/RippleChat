@@ -18,11 +18,14 @@ import { MessageSquarePlus } from "lucide-react";
 export function NewChatDialog() {
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleUserSelected = (user: UserProfile) => {
+  // Updated to accept chatId
+  const handleUserSelected = (user: UserProfile, chatId?: string) => {
     // In a real scenario, this would navigate to a chat with the user
-    // or create a new chat session.
-    console.log("User selected for new chat:", user);
-    setIsOpen(false); // Close dialog after selection
+    // or update the current view to focus on this new/existing chat.
+    console.log("User selected for new chat:", user, "Chat ID:", chatId);
+    // For now, we just log it and close the dialog.
+    // Navigation or state update to show the specific chat would happen here.
+    setIsOpen(false);
   };
 
   return (

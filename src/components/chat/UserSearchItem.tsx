@@ -4,14 +4,15 @@
 import type { UserProfile } from "@/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { MessageSquarePlus } from "lucide-react";
+import { MessageSquarePlus, Loader2 } from "lucide-react";
 
 interface UserSearchItemProps {
   user: UserProfile;
   onStartChat: (user: UserProfile) => void;
+  disabled?: boolean;
 }
 
-export function UserSearchItem({ user, onStartChat }: UserSearchItemProps) {
+export function UserSearchItem({ user, onStartChat, disabled = false }: UserSearchItemProps) {
   const getInitials = (name?: string | null, username?: string | null) => {
     if (username && username.startsWith('@')) {
       return username.substring(1, 3).toUpperCase();
@@ -39,8 +40,9 @@ export function UserSearchItem({ user, onStartChat }: UserSearchItemProps) {
         size="sm"
         onClick={() => onStartChat(user)}
         className="text-primary hover:text-primary/90"
+        disabled={disabled}
       >
-        <MessageSquarePlus className="mr-2 h-4 w-4" />
+        {disabled ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageSquarePlus className="mr-2 h-4 w-4" />}
         Chat
       </Button>
     </div>

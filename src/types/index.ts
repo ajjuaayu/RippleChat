@@ -17,7 +17,14 @@ export interface Message {
   userPhotoURL?: string | null;
   timestamp: Timestamp | Date | any; // Firestore Timestamp server-side, Date client-side or any for flexibility
   isModerated?: boolean;
-  // Removed message.username as userName will now hold the @username for messages.
-  // If we need both original displayName and @username, we can add @username separately.
-  // For now, simplifying to use userName for the displayable chat name.
+}
+
+export interface Chat {
+  id: string; // The chatId (e.g., uid1_uid2)
+  participantUids: string[];
+  // participantInfo?: { [uid: string]: { displayName?: string | null, username?: string | null, photoURL?: string | null } }; // Optional: denormalized info
+  createdAt: Timestamp | Date;
+  lastMessage?: string | null;
+  lastMessageTimestamp?: Timestamp | Date | null;
+  // unreadCounts?: { [uid: string]: number }; // Optional for unread message counts
 }
