@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/config";
 import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation"; // Removed as router.push will be handled by AuthRedirect
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import type { UserProfile } from "@/types";
 
@@ -25,7 +25,7 @@ const GoogleIcon = () => (
 export function GoogleSignInButton() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
+  // const router = useRouter(); // Removed
   const provider = new GoogleAuthProvider();
 
   const handleSignIn = async () => {
@@ -49,7 +49,7 @@ export function GoogleSignInButton() {
       }
       
       toast({ title: "Success", description: "Logged in with Google successfully!" });
-      router.push("/chat");
+      // router.push("/chat"); // Removed: AuthRedirect will handle this
     } catch (error: any) {
       toast({
         title: "Google Sign-In Error",

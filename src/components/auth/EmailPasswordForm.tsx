@@ -16,7 +16,7 @@ import {
 } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/config";
 import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation"; // Removed as router.push will be handled by AuthRedirect
 import { doc, setDoc } from "firebase/firestore";
 import type { UserProfile } from "@/types";
 
@@ -35,7 +35,7 @@ interface EmailPasswordFormProps {
 export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
+  // const router = useRouter(); // Removed
 
   const {
     register,
@@ -70,7 +70,7 @@ export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) 
         await signInWithEmailAndPassword(auth, data.email, data.password);
         toast({ title: "Success", description: "Logged in successfully!" });
       }
-      router.push("/chat");
+      // router.push("/chat"); // Removed: AuthRedirect will handle this
     } catch (error: any) {
       toast({
         title: "Authentication Error",
