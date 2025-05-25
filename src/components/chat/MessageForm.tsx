@@ -1,8 +1,8 @@
 
 "use client";
 
-import { useRef, useEffect } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useRef, useEffect, useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +26,7 @@ export function MessageForm() {
   const formRef = useRef<HTMLFormElement>(null);
 
   const initialState: SendMessageActionState | undefined = undefined;
-  const [state, formAction] = useFormState(sendMessageAction, initialState);
+  const [state, formAction] = useActionState(sendMessageAction, initialState);
 
   useEffect(() => {
     if (state?.success) {
