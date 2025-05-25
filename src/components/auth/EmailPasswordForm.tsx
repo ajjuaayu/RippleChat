@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -19,28 +19,98 @@ import { Loader2 } from "lucide-react";
 import { doc, setDoc } from "firebase/firestore";
 import type { UserProfile } from "@/types";
 
+const MIN_DISPLAY_NAME_LENGTH = 2;
+const MAX_DISPLAY_NAME_LENGTH = 50;
+const MIN_USERNAME_CHARS = 3; // Characters after @
+const MAX_USERNAME_CHARS = 15; // Characters after @
+
 const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
-  displayName: z.string().optional(), // Only for signup
-  username: z.string().optional(), // Only for signup
-}).refine(data => {
-  // Username is required only if isSignUp is true
-  if (data.displayName !== undefined && (!data.username || data.username.trim() === "")) {
-    return false;
+  displayName: z.string().optional(),
+  username: z.string().optional(),
+})
+.superRefine((data, ctx) => {
+  // isSignUp context is determined if defaultValues has initialized displayName (even to "")
+  const isSignUpMode = data.displayName !== undefined;
+
+  if (isSignUpMode) {
+    // Display Name validation for signup
+    if (!data.displayName || data.displayName.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Display name is required.",
+        path: ["displayName"],
+      });
+    } else {
+      if (data.displayName.length < MIN_DISPLAY_NAME_LENGTH) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.too_small,
+          minimum: MIN_DISPLAY_NAME_LENGTH,
+          type: "string",
+          inclusive: true,
+          message: `Display name must be at least ${MIN_DISPLAY_NAME_LENGTH} characters.`,
+          path: ["displayName"],
+        });
+      }
+      if (data.displayName.length > MAX_DISPLAY_NAME_LENGTH) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.too_big,
+          maximum: MAX_DISPLAY_NAME_LENGTH,
+          type: "string",
+          inclusive: true,
+          message: `Display name can be at most ${MAX_DISPLAY_NAME_LENGTH} characters.`,
+          path: ["displayName"],
+        });
+      }
+    }
+
+    // Username validation for signup
+    if (!data.username || data.username.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Username is required.",
+        path: ["username"],
+      });
+    } else {
+      if (!data.username.startsWith('@')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Username must start with @.",
+          path: ["username"],
+        });
+      } else {
+        const usernamePart = data.username.substring(1);
+        if (usernamePart.length < MIN_USERNAME_CHARS) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.too_small,
+            minimum: MIN_USERNAME_CHARS,
+            type: "string",
+            inclusive: true,
+            message: `Username must have at least ${MIN_USERNAME_CHARS} characters after @.`,
+            path: ["username"],
+          });
+        }
+        if (usernamePart.length > MAX_USERNAME_CHARS) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.too_big,
+            maximum: MAX_USERNAME_CHARS,
+            type: "string",
+            inclusive: true,
+            message: `Username can have at most ${MAX_USERNAME_CHARS} characters after @.`,
+            path: ["username"],
+          });
+        }
+        if (!/^[a-zA-Z0-9_]+$/.test(usernamePart)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Username can only contain letters, numbers, and underscores after @.",
+            path: ["username"],
+          });
+        }
+      }
+    }
   }
-  return true;
-}, {
-  message: "Username is required for sign up.",
-  path: ["username"], // Point error to username field
-}).refine(data => {
-  if (data.username && !/^@[a-zA-Z0-9_]{3,}$/.test(data.username)) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Username must start with @, be at least 3 characters long (after @), and contain only letters, numbers, or underscores.",
-  path: ["username"],
 });
 
 
@@ -58,24 +128,25 @@ export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) 
     register,
     handleSubmit,
     formState: { errors },
-    setValue, // To set username for validation schema
+    setValue,
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      email: "",
+      password: "",
       displayName: isSignUp ? "" : undefined,
       username: isSignUp ? "" : undefined,
     }
   });
 
-  // Effect to ensure validation schema reacts to isSignUp prop
   React.useEffect(() => {
+    // This ensures that if the form type were to dynamically switch (though it doesn't in this app)
+    // or for initial setup, the correct fields are considered 'defined' for the Zod schema's refine logic.
     if (isSignUp) {
-      setValue("displayName", "");
-      setValue("username", "");
+      setValue("displayName", ""); // Ensures displayName is defined for Zod refine
+      setValue("username", "");   // Ensures username is defined for Zod refine
     } else {
-      // @ts-ignore
       setValue("displayName", undefined);
-       // @ts-ignore
       setValue("username", undefined);
     }
   }, [isSignUp, setValue]);
@@ -85,26 +156,17 @@ export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) 
     setLoading(true);
     try {
       if (isSignUp) {
-        if (!data.displayName || data.displayName.trim() === "") {
-            toast({ title: "Error", description: "Display name is required for sign up.", variant: "destructive" });
-            setLoading(false);
-            return;
-        }
-        if (!data.username || !/^@[a-zA-Z0-9_]{3,}$/.test(data.username)) {
-          toast({ title: "Error", description: "Username must start with @, be at least 3 characters long (after @), and contain only letters, numbers, or underscores.", variant: "destructive" });
-          setLoading(false);
-          return;
-        }
-
+        // Validation is now fully handled by Zod, direct user creation if data is valid.
+        // displayName and username are asserted non-null due to Zod validation for isSignUp=true.
         const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-        await updateProfile(userCredential.user, { displayName: data.displayName });
+        await updateProfile(userCredential.user, { displayName: data.displayName! });
 
         const userProfile: UserProfile = {
           uid: userCredential.user.uid,
           email: userCredential.user.email,
-          displayName: data.displayName,
+          displayName: data.displayName!,
           photoURL: userCredential.user.photoURL,
-          username: data.username.trim(),
+          username: data.username!.trim(),
         };
         await setDoc(doc(db, "users", userCredential.user.uid), userProfile);
 
@@ -117,6 +179,8 @@ export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) 
       let errorMessage = error.message || "An unexpected error occurred.";
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = "This email is already in use. Please try logging in or use a different email.";
+      } else if (error.code === 'auth/invalid-credential') {
+        errorMessage = "Invalid email or password. Please try again.";
       }
       toast({
         title: "Authentication Error",
@@ -145,7 +209,9 @@ export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) 
             {errors.username && (
               <p className="text-sm text-destructive">{errors.username.message}</p>
             )}
-             <p className="text-xs text-muted-foreground">Must start with @, be 3+ characters, letters, numbers, or underscores.</p>
+             <p className="text-xs text-muted-foreground">
+              Must start with @, be {MIN_USERNAME_CHARS}-{MAX_USERNAME_CHARS} characters after @, letters, numbers, or underscores.
+             </p>
           </div>
         </>
       )}
