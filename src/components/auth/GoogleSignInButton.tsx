@@ -7,7 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/config";
 import { Loader2 } from "lucide-react";
-// import { useRouter } from "next/navigation"; // Removed as router.push will be handled by AuthRedirect
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import type { UserProfile } from "@/types";
 
@@ -21,11 +20,26 @@ const GoogleIcon = () => (
   </svg>
 );
 
+const generateUsername = (displayName: string | null | undefined, email: string | null | undefined, uid: string): string => {
+  let base = "";
+  if (displayName) {
+    base = displayName.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '');
+  } else if (email) {
+    base = email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
+  }
+  
+  if (base.length < 3) {
+    base = `user${uid.substring(0, 5)}`;
+  }
+  if (base.length > 15) { // Max length for username base before adding @
+    base = base.substring(0, 15);
+  }
+  return `@${base}`;
+};
 
 export function GoogleSignInButton() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  // const router = useRouter(); // Removed
   const provider = new GoogleAuthProvider();
 
   const handleSignIn = async () => {
@@ -34,22 +48,26 @@ export function GoogleSignInButton() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
-      // Check if user exists in Firestore, if not, create them
       const userDocRef = doc(db, "users", user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
       if (!userDocSnap.exists()) {
+        const newUsername = generateUsername(user.displayName, user.email, user.uid);
         const userProfile: UserProfile = {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName,
           photoURL: user.photoURL,
+          username: newUsername,
         };
         await setDoc(doc(db, "users", user.uid), userProfile);
+         toast({ title: "Welcome!", description: `Your username is ${newUsername}. You can change this in your profile settings later.` });
+      } else {
+        // If user exists, ensure their local profile object might have a username if fetched (AuthContext handles this)
+        // No action needed here as AuthContext will load the existing profile.
       }
       
       toast({ title: "Success", description: "Logged in with Google successfully!" });
-      // router.push("/chat"); // Removed: AuthRedirect will handle this
     } catch (error: any) {
       toast({
         title: "Google Sign-In Error",

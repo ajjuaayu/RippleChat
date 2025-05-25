@@ -6,19 +6,17 @@ import { moderateText } from "@/ai/flows/profanity-filter";
 import { sendMessage as fbSendMessage } from "@/lib/firebase/firestore";
 import type { UserProfile } from "@/types";
 
-// This is a simplified way to get user info. In a real app, you might get this from a session or verify a token.
-// For now, we'll pass it from the client. This is NOT secure for production without server-side session/token validation.
-// However, Firebase client-side auth with Firestore rules provides security for writes.
-// The server action itself should ideally verify the user making the request if not relying solely on Firestore rules.
+const MessageUserSchema = z.object({
+  uid: z.string(),
+  displayName: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  photoURL: z.string().optional().nullable(),
+  username: z.string().optional().nullable(), // Added username
+});
 
 const MessageSchema = z.object({
   text: z.string().min(1, "Message cannot be empty.").max(500, "Message too long."),
-  user: z.object({ // Pass user object from client
-    uid: z.string(),
-    displayName: z.string().optional().nullable(),
-    email: z.string().optional().nullable(),
-    photoURL: z.string().optional().nullable(),
-  }),
+  user: MessageUserSchema, // Use the extended user schema
 });
 
 export interface SendMessageActionState {
@@ -40,10 +38,17 @@ export async function sendMessageAction(
   
   let user: UserProfile;
   try {
-    user = JSON.parse(rawUser) as UserProfile;
+    // Ensure the parsed user object conforms to UserProfile, which includes username
+    const parsedUser = JSON.parse(rawUser);
+    const validationUser = MessageUserSchema.safeParse(parsedUser);
+    if (!validationUser.success) {
+      throw new Error(`Invalid user data: ${validationUser.error.flatten().fieldErrors}`);
+    }
+    user = validationUser.data as UserProfile; // Cast to UserProfile
     if (!user.uid) throw new Error("User UID is missing.");
-  } catch (e) {
-    return { error: "Invalid user data." };
+
+  } catch (e: any) {
+    return { error: `Invalid user data: ${e.message}` };
   }
 
 
@@ -59,13 +64,10 @@ export async function sendMessageAction(
     const moderationResult = await moderateText({ text });
 
     if (moderationResult.isProfane) {
-      // Option 1: Block message
       return { error: `Message blocked due to: ${moderationResult.reason}. Please be respectful.`, moderated: true };
-      // Option 2: Send moderated message (e.g., replace with stars)
-      // await fbSendMessage("Message moderated due to profanity.", user, true);
-      // return { success: true, moderated: true };
     }
 
+    // Pass the full user object (which now includes username) to fbSendMessage
     await fbSendMessage(text, user);
     return { success: true };
   } catch (error: any) {

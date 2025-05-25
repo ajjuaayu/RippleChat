@@ -3,7 +3,7 @@
 
 import { useRef, useEffect } from "react";
 import { useFormStatus } from "react-dom";
-import { useActionState } from "react"; // Changed from react-dom
+import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -34,8 +34,6 @@ export function MessageForm() {
     if (state?.success) {
       formRef.current?.reset();
       textAreaRef.current?.focus();
-      // Optionally show a success toast if needed, but usually not for chat messages
-      // toast({ title: "Message sent!" });
     }
     if (state?.error) {
       toast({
@@ -54,7 +52,19 @@ export function MessageForm() {
   return (
     <form
       ref={formRef}
-      action={formAction} // Use the action prop
+      action={(formData) => {
+        // Add user data to formData before calling the action
+        if (currentUser) {
+          formData.set("user", JSON.stringify({
+            uid: currentUser.uid,
+            displayName: currentUser.displayName,
+            email: currentUser.email,
+            photoURL: currentUser.photoURL,
+            username: currentUser.username, // Include username
+          }));
+        }
+        formAction(formData);
+      }}
       className="sticky bottom-0 flex items-center space-x-2 border-t bg-background p-3 sm:p-4"
     >
       <Textarea
@@ -66,7 +76,6 @@ export function MessageForm() {
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
-            // Check if text area has content before submitting
             if (textAreaRef.current?.value.trim() !== "" && formRef.current) {
               formRef.current.requestSubmit();
             }
@@ -74,7 +83,10 @@ export function MessageForm() {
         }}
         required
       />
-      {/* Hidden input to pass user data */}
+      {/* 
+        The user data is now added to formData directly in the action prop's callback,
+        so a hidden input is no longer strictly necessary here if we handle it like that.
+        However, if we prefer declarative hidden inputs, it would be:
       <input
         type="hidden"
         name="user"
@@ -83,8 +95,11 @@ export function MessageForm() {
           displayName: currentUser.displayName,
           email: currentUser.email,
           photoURL: currentUser.photoURL,
+          username: currentUser.username, // Include username
         })}
-      />
+      /> 
+      For this change, I've opted to add it directly to formData in the action callback.
+      */}
       <SubmitButton />
     </form>
   );

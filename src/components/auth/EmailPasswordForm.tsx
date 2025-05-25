@@ -16,7 +16,6 @@ import {
 } from "firebase/auth";
 import { auth, db } from "@/lib/firebase/config";
 import { Loader2 } from "lucide-react";
-// import { useRouter } from "next/navigation"; // Removed as router.push will be handled by AuthRedirect
 import { doc, setDoc } from "firebase/firestore";
 import type { UserProfile } from "@/types";
 
@@ -24,7 +23,26 @@ const formSchema = z.object({
   email: z.string().email({ message: "Invalid email address." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   displayName: z.string().optional(), // Only for signup
+  username: z.string().optional(), // Only for signup
+}).refine(data => {
+  // Username is required only if isSignUp is true
+  if (data.displayName !== undefined && (!data.username || data.username.trim() === "")) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Username is required for sign up.",
+  path: ["username"], // Point error to username field
+}).refine(data => {
+  if (data.username && !/^@[a-zA-Z0-9_]{3,}$/.test(data.username)) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Username must start with @, be at least 3 characters long (after @), and contain only letters, numbers, or underscores.",
+  path: ["username"],
 });
+
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -35,15 +53,33 @@ interface EmailPasswordFormProps {
 export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  // const router = useRouter(); // Removed
 
   const {
     register,
     handleSubmit,
     formState: { errors },
+    setValue, // To set username for validation schema
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
+    defaultValues: {
+      displayName: isSignUp ? "" : undefined,
+      username: isSignUp ? "" : undefined,
+    }
   });
+
+  // Effect to ensure validation schema reacts to isSignUp prop
+  React.useEffect(() => {
+    if (isSignUp) {
+      setValue("displayName", "");
+      setValue("username", "");
+    } else {
+      // @ts-ignore
+      setValue("displayName", undefined);
+       // @ts-ignore
+      setValue("username", undefined);
+    }
+  }, [isSignUp, setValue]);
+
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
@@ -54,6 +90,12 @@ export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) 
             setLoading(false);
             return;
         }
+        if (!data.username || !/^@[a-zA-Z0-9_]{3,}$/.test(data.username)) {
+          toast({ title: "Error", description: "Username must start with @, be at least 3 characters long (after @), and contain only letters, numbers, or underscores.", variant: "destructive" });
+          setLoading(false);
+          return;
+        }
+
         const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
         await updateProfile(userCredential.user, { displayName: data.displayName });
 
@@ -62,6 +104,7 @@ export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) 
           email: userCredential.user.email,
           displayName: data.displayName,
           photoURL: userCredential.user.photoURL,
+          username: data.username.trim(),
         };
         await setDoc(doc(db, "users", userCredential.user.uid), userProfile);
 
@@ -70,11 +113,14 @@ export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) 
         await signInWithEmailAndPassword(auth, data.email, data.password);
         toast({ title: "Success", description: "Logged in successfully!" });
       }
-      // router.push("/chat"); // Removed: AuthRedirect will handle this
     } catch (error: any) {
+      let errorMessage = error.message || "An unexpected error occurred.";
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = "This email is already in use. Please try logging in or use a different email.";
+      }
       toast({
         title: "Authentication Error",
-        description: error.message || "An unexpected error occurred.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -85,13 +131,23 @@ export function EmailPasswordForm({ isSignUp = false }: EmailPasswordFormProps) 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {isSignUp && (
-        <div className="space-y-2">
-          <Label htmlFor="displayName">Display Name</Label>
-          <Input id="displayName" type="text" {...register("displayName")} placeholder="Your Name" />
-          {errors.displayName && (
-            <p className="text-sm text-destructive">{errors.displayName.message}</p>
-          )}
-        </div>
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="displayName">Display Name</Label>
+            <Input id="displayName" type="text" {...register("displayName")} placeholder="Your Full Name" />
+            {errors.displayName && (
+              <p className="text-sm text-destructive">{errors.displayName.message}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="username">Username</Label>
+            <Input id="username" type="text" {...register("username")} placeholder="@yourusername" />
+            {errors.username && (
+              <p className="text-sm text-destructive">{errors.username.message}</p>
+            )}
+             <p className="text-xs text-muted-foreground">Must start with @, be 3+ characters, letters, numbers, or underscores.</p>
+          </div>
+        </>
       )}
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>

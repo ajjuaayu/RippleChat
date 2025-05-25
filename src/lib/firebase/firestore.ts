@@ -17,7 +17,7 @@ const MESSAGES_COLLECTION = "messages";
 
 export async function sendMessage(
   text: string,
-  user: UserProfile,
+  user: UserProfile, // UserProfile now includes username
   isModerated: boolean = false
 ): Promise<void> {
   if (!user || !user.uid) {
@@ -27,7 +27,7 @@ export async function sendMessage(
     await addDoc(collection(db, MESSAGES_COLLECTION), {
       text: text,
       userId: user.uid,
-      userName: user.displayName || user.email,
+      userName: user.username || user.displayName || user.email, // Prioritize username
       userPhotoURL: user.photoURL,
       timestamp: serverTimestamp(),
       isModerated: isModerated,

@@ -12,7 +12,10 @@ interface MessageItemProps {
 }
 
 export function MessageItem({ message, isCurrentUser }: MessageItemProps) {
-  const getInitials = (name?: string | null) => {
+  const getInitials = (name?: string | null, username?: string | null) => {
+    if (username && username.startsWith('@')) {
+      return username.substring(1, 3).toUpperCase(); // Use first two chars of username (after @)
+    }
     if (!name) return message.userId.substring(0, 2).toUpperCase();
     return name.split(" ").map(n => n[0]).join("").toUpperCase();
   };
@@ -20,14 +23,17 @@ export function MessageItem({ message, isCurrentUser }: MessageItemProps) {
   const formatTimestamp = (timestamp: any) => {
     if (!timestamp) return "";
     try {
-      // Firestore Timestamps might be objects with seconds and nanoseconds
       const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
       return formatDistanceToNow(date, { addSuffix: true });
     } catch (error) {
-      // Fallback for potentially already formatted strings or numbers
       return new Date(timestamp).toLocaleTimeString();
     }
   };
+
+  // In types/index.ts, Message.userName now holds the @username.
+  // Fallback to a generic "User" if somehow userName (the @username) is missing.
+  const displayUserName = message.userName || "User";
+
 
   return (
     <div
@@ -38,9 +44,9 @@ export function MessageItem({ message, isCurrentUser }: MessageItemProps) {
     >
       {!isCurrentUser && (
         <Avatar className="h-10 w-10 flex-shrink-0 border-2 border-secondary">
-          <AvatarImage src={message.userPhotoURL || undefined} alt={message.userName || "User"} data-ai-hint="profile avatar" />
+          <AvatarImage src={message.userPhotoURL || undefined} alt={displayUserName} data-ai-hint="profile avatar" />
           <AvatarFallback className="bg-secondary text-secondary-foreground font-semibold">
-            {getInitials(message.userName)}
+            {getInitials(null, message.userName)}
           </AvatarFallback>
         </Avatar>
       )}
@@ -54,7 +60,12 @@ export function MessageItem({ message, isCurrentUser }: MessageItemProps) {
       >
         {!isCurrentUser && (
           <p className="text-xs font-semibold text-accent mb-0.5">
-            {message.userName || "Anonymous"}
+            {displayUserName}
+          </p>
+        )}
+        {isCurrentUser && ( // Display current user's name on their own messages if desired
+           <p className="text-xs font-semibold text-primary-foreground/80 mb-0.5 text-right">
+            {displayUserName}
           </p>
         )}
         <p className="text-sm leading-relaxed">{message.text}</p>
@@ -69,9 +80,9 @@ export function MessageItem({ message, isCurrentUser }: MessageItemProps) {
       </div>
       {isCurrentUser && (
          <Avatar className="h-10 w-10 flex-shrink-0 border-2 border-primary">
-          <AvatarImage src={message.userPhotoURL || undefined} alt={message.userName || "User"} data-ai-hint="profile avatar" />
+          <AvatarImage src={message.userPhotoURL || undefined} alt={displayUserName} data-ai-hint="profile avatar" />
           <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-            {getInitials(message.userName)}
+            {getInitials(null, message.userName)}
           </AvatarFallback>
         </Avatar>
       )}
