@@ -16,46 +16,73 @@ export function AuthRedirect({ children }: AuthRedirectProps) {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!isFirebaseReady || loading) return; // Wait until Firebase auth state is determined
-
-    const isAuthPage = pathname === "/login";
-
-    if (currentUser && isAuthPage) {
-      router.replace("/chat");
-    } else if (!currentUser && !isAuthPage && pathname !== "/") { 
-      // If not on login page or root, and not logged in, redirect to login
-      // This condition needs to be careful for the root page.
-      if (pathname === "/chat") { // Specifically protect /chat
-         router.replace("/login");
-      }
-    } else if (!currentUser && pathname === "/") {
-        router.replace("/login");
-    } else if (currentUser && pathname === "/") {
-        router.replace("/chat");
+    // Wait until Firebase auth state is determined and not in an initial loading state.
+    if (loading || !isFirebaseReady) {
+      return;
     }
 
-  }, [currentUser, loading, router, pathname, isFirebaseReady]);
+    const isLoginPage = pathname === "/login";
+    const isChatPage = pathname === "/chat";
+    const isRootPage = pathname === "/"; // The home page
 
+    if (currentUser) {
+      // User is authenticated
+      if (isLoginPage || isRootPage) {
+        // If on login page or root page, redirect to chat
+        router.replace("/chat");
+      }
+      // If on chat page or any other authenticated route, render children (do nothing here)
+    } else {
+      // User is NOT authenticated
+      if (isChatPage) {
+        // If on chat page (or any other protected route that's not login/root)
+        router.replace("/login");
+      } else if (isRootPage) {
+        // If on root page and not authenticated, redirect to login
+        router.replace("/login");
+      }
+      // If on login page and not authenticated, render children (do nothing here)
+    }
+  }, [currentUser, loading, isFirebaseReady, pathname, router]);
+
+  // Show a loading spinner while auth state is being determined initially.
   if (loading || !isFirebaseReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
-  
-  // Specific handling for protected routes like /chat
-  if (pathname === "/chat" && !currentUser && isFirebaseReady) {
-    // Already handled by useEffect, but as a safeguard or for components that render before useEffect runs
-    // This might cause a flash if router.replace hasn't finished. The useEffect should be primary.
+
+  // Show a loading spinner if a redirect is likely imminent based on current state and path.
+  // This helps prevent a flash of the wrong page content.
+  const isLoginPage = pathname === "/login";
+  const isChatPage = pathname === "/chat";
+
+  if (currentUser && isLoginPage) {
+    // User is logged in but still on login page (useEffect will redirect to /chat)
     return (
-      <div className="flex min-h-screen items-center justify-center">
+     <div className="flex min-h-screen items-center justify-center bg-background">
+       <Loader2 className="h-12 w-12 animate-spin text-primary" />
+       <p className="ml-2 text-muted-foreground">Redirecting to chat...</p>
+     </div>
+   );
+  }
+
+  if (!currentUser && isChatPage) {
+    // User is not logged in but on chat page (useEffect will redirect to /login)
+     return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-2">Redirecting to login...</p>
+        <p className="ml-2 text-muted-foreground">Redirecting to login...</p>
       </div>
     );
   }
 
-
+  // If none of the above loading/redirecting conditions are met, render the children.
+  // This means:
+  // - User is on /login and not logged in (show login form)
+  // - User is on /chat and logged in (show chat page)
+  // - User is on other pages and auth state is appropriate for that page
   return <>{children}</>;
 }
