@@ -45,7 +45,7 @@ export async function sendMessage(
   const batch = writeBatch(db);
 
   // 1. Add the new message
-  const newMessageRef = doc(chatMessagesCollectionRef); // Auto-generate ID
+  const newMessageRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages")); // Auto-generate ID for subcollection message
   batch.set(newMessageRef, {
     text: text,
     userId: user.uid,
@@ -58,9 +58,8 @@ export async function sendMessage(
   // 2. Update the last message on the chat document
   const chatDocRef = doc(db, CHATS_COLLECTION, chatId);
   batch.update(chatDocRef, {
-    lastMessageText: text,
+    lastMessageText: text, // Use a distinct field for the text snippet
     lastMessageTimestamp: serverTimestamp(),
-    // Optionally, update unread counts or other metadata here
   });
   
   try {
@@ -77,8 +76,7 @@ export function getMessagesSubscription(
   messageLimit: number = 50
 ): Unsubscribe {
   if (!chatId) {
-    // console.error("getMessagesSubscription: chatId is required.");
-    // Immediately call callback with empty array or handle as an error state
+    console.warn("getMessagesSubscription: chatId is undefined or empty. No messages will be fetched.");
     callback([]);
     return () => {}; // Return a no-op unsubscribe function
   }
@@ -118,15 +116,13 @@ export async function searchUsersByUsername(
   currentUserId: string,
   searchLimit: number = 10
 ): Promise<UserProfile[]> {
-  // The action `searchUsersAction` validates that searchTerm starts with "@"
-  // and has a minimum length.
-
   const usersRef = collection(db, USERS_COLLECTION);
+  // Ensure search term is treated as a prefix for username
   const q = query(
     usersRef,
     where("username", ">=", searchTerm),
-    where("username", "<=", searchTerm + "\uf8ff"),
-    orderBy("username"), // Ensure this is ordered for consistent prefix searching
+    where("username", "<=", searchTerm + "\uf8ff"), // \uf8ff is a very high code point in Unicode
+    orderBy("username"), // Order by username for consistent prefix searching
     limit(searchLimit)
   );
 
@@ -134,20 +130,16 @@ export async function searchUsersByUsername(
     const querySnapshot = await getDocs(q);
     const users: UserProfile[] = [];
     querySnapshot.forEach((doc) => {
-      if (doc.id !== currentUserId) {
+      if (doc.id !== currentUserId) { // Exclude current user from search results
         users.push({ uid: doc.id, ...doc.data() } as UserProfile);
       }
     });
     return users;
   } catch (error: any) {
-    // Log detailed error on the server
     console.error(
-      "Firestore error in fbSearchUsersByUsername. Code:",
-      error.code,
-      "Message:",
-      error.message,
-      "Full Error:",
-      JSON.stringify(error) // Stringify for better logging of the object
+      "Firestore error in fbSearchUsersByUsername. Code:", error.code,
+      "Message:", error.message,
+      "Full Error:", JSON.stringify(error, Object.getOwnPropertyNames(error))
     );
 
     let messageToThrow = error.message || `An unspecified Firestore error occurred (Code: ${error.code || 'UNKNOWN'}). Check server logs for details.`;
@@ -155,7 +147,6 @@ export async function searchUsersByUsername(
     if (error.code === 'permission-denied') {
       messageToThrow = "Firestore permission denied when searching users. Please verify your security rules for the 'users' collection allow reads for authenticated users.";
     } else if (error.code === 'failed-precondition' && error.message && error.message.toLowerCase().includes('index')) {
-      // Firestore error messages for missing indexes typically include a link.
       messageToThrow = `The query for searching users requires a Firestore index. Please check the server logs or the Firebase console. The Firestore error message might contain a link to create the necessary index. Original message: ${error.message}`;
     }
     
@@ -163,16 +154,16 @@ export async function searchUsersByUsername(
   }
 }
 
-// Function to update the last message in a chat document (can be expanded)
+// Function to update the last message in a chat document
 export async function updateChatLastMessage(
   chatId: string,
   messageText: string,
-  messageTimestamp: Timestamp | Date | any
+  messageTimestamp: Timestamp | Date | any // Allow flexibility for serverTimestamp
 ): Promise<void> {
   const chatDocRef = doc(db, CHATS_COLLECTION, chatId);
   try {
     await updateDoc(chatDocRef, {
-      lastMessageText: messageText,
+      lastMessageText: messageText, // Consistent field name
       lastMessageTimestamp: messageTimestamp,
     });
   } catch (error) {
