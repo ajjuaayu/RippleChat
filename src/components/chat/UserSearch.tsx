@@ -8,15 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Search, UserX } from "lucide-react";
 import { searchUsersAction, type SearchUsersActionState } from "@/app/users/actions";
-import { createOrGetChatAction, type CreateOrGetChatActionState } from "@/app/chats/actions"; // New action
+import { createOrGetChatAction, type CreateOrGetChatActionState } from "@/app/chats/actions";
 import { UserSearchItem } from "./UserSearchItem";
 import type { UserProfile } from "@/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext"; // To get current user UID
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
 
 interface UserSearchProps {
-  onUserSelected: (user: UserProfile, chatId?: string) => void; // Pass chatId
+  onUserSelected: (user: UserProfile, chatId?: string) => void;
   onCloseDialog?: () => void;
 }
 
@@ -31,6 +32,7 @@ function SearchSubmitButton() {
 
 export function UserSearch({ onUserSelected, onCloseDialog }: UserSearchProps) {
   const { currentUser } = useAuth();
+  const router = useRouter();
   const searchInitialState: SearchUsersActionState | undefined = undefined;
   const [searchState, searchFormAction] = useActionState(searchUsersAction, searchInitialState);
   
@@ -77,9 +79,12 @@ export function UserSearch({ onUserSelected, onCloseDialog }: UserSearchProps) {
       const message = result.isNew ? `New chat created with ${selectedUser.username || selectedUser.displayName}!` : `Opened existing chat with ${selectedUser.username || selectedUser.displayName}.`;
       toast({
         title: "Success",
-        description: `${message} Chat ID: ${result.chatId}`,
+        description: message,
       });
-      onUserSelected(selectedUser, result.chatId); // Pass chatId back
+      onUserSelected(selectedUser, result.chatId); 
+      if (result.chatId) {
+        router.push(`/chat/${result.chatId}`);
+      }
       if (onCloseDialog) {
         onCloseDialog();
       }
@@ -100,8 +105,12 @@ export function UserSearch({ onUserSelected, onCloseDialog }: UserSearchProps) {
           className="flex-1"
           defaultValue={searchState?.searchTerm || ""}
           required
-          minLength={3} // Ensure @ + 2 chars
+          minLength={3} 
+          disabled={!currentUser || isCreatingChat}
         />
+        {currentUser && (
+          <input type="hidden" name="currentUserId" value={currentUser.uid} />
+        )}
         <SearchSubmitButton />
       </form>
 
@@ -124,7 +133,7 @@ export function UserSearch({ onUserSelected, onCloseDialog }: UserSearchProps) {
         <ScrollArea className="flex-1 max-h-[calc(100vh-200px)] sm:max-h-[300px]">
           <div className="space-y-1 pr-3">
             {searchState.users.map((user) => (
-              <UserSearchItem key={user.uid} user={user} onStartChat={handleStartChat} disabled={isCreatingChat} />
+              <UserSearchItem key={user.uid} user={user} onStartChat={handleStartChat} disabled={isCreatingChat || !currentUser} />
             ))}
           </div>
         </ScrollArea>
@@ -134,6 +143,11 @@ export function UserSearch({ onUserSelected, onCloseDialog }: UserSearchProps) {
          <div className="text-center py-10 text-muted-foreground">
           <Search className="mx-auto h-12 w-12 mb-3 opacity-50" />
           <p>Enter a username (e.g., @john) to find users.</p>
+        </div>
+      )}
+       {!currentUser && !isCreatingChat && (
+        <div className="text-center py-10 text-destructive">
+          <p>You must be logged in to search for users.</p>
         </div>
       )}
     </div>
