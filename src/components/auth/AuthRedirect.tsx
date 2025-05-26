@@ -16,26 +16,27 @@ export function AuthRedirect({ children }: AuthRedirectProps) {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Wait until Firebase auth state is determined and not in an initial loading state.
     if (loading || !isFirebaseReady) {
-      return;
+      return; // Wait until Firebase auth state is determined
     }
 
     const isLoginPage = pathname === "/login";
-    const isChatPage = pathname === "/chat";
-    const isRootPage = pathname === "/"; // The home page
+    const isRootPage = pathname === "/";
+    // Check if it's any page under /chat, including /chat itself or /chat/[id]
+    const isAnyChatPage = pathname.startsWith("/chat"); 
+    const isChatLobbyPage = pathname === "/chat"; // Specifically the /chat page
 
     if (currentUser) {
-      // User is authenticated
+      // User IS authenticated
       if (isLoginPage || isRootPage) {
-        // If on login page or root page, redirect to chat
+        // If on login or root, redirect to chat lobby
         router.replace("/chat");
       }
-      // If on chat page or any other authenticated route, render children (do nothing here)
+      // If on any chat page (lobby or specific chat) or other authenticated route, render children (do nothing here)
     } else {
       // User is NOT authenticated
-      if (isChatPage) {
-        // If on chat page (or any other protected route that's not login/root)
+      if (isAnyChatPage) {
+        // If trying to access any chat-related page (lobby or specific chat) without auth, redirect to login
         router.replace("/login");
       } else if (isRootPage) {
         // If on root page and not authenticated, redirect to login
@@ -45,7 +46,6 @@ export function AuthRedirect({ children }: AuthRedirectProps) {
     }
   }, [currentUser, loading, isFirebaseReady, pathname, router]);
 
-  // Show a loading spinner while auth state is being determined initially.
   if (loading || !isFirebaseReady) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -54,13 +54,12 @@ export function AuthRedirect({ children }: AuthRedirectProps) {
     );
   }
 
-  // Show a loading spinner if a redirect is likely imminent based on current state and path.
-  // This helps prevent a flash of the wrong page content.
+  // More specific loading/redirecting indicators
   const isLoginPage = pathname === "/login";
-  const isChatPage = pathname === "/chat";
+  const isAnyChatPage = pathname.startsWith("/chat");
 
   if (currentUser && isLoginPage) {
-    // User is logged in but still on login page (useEffect will redirect to /chat)
+    // User is logged in but still on login page (useEffect will redirect to /chat lobby)
     return (
      <div className="flex min-h-screen items-center justify-center bg-background">
        <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -69,8 +68,8 @@ export function AuthRedirect({ children }: AuthRedirectProps) {
    );
   }
 
-  if (!currentUser && isChatPage) {
-    // User is not logged in but on chat page (useEffect will redirect to /login)
+  if (!currentUser && isAnyChatPage) {
+    // User is not logged in but on a chat page (useEffect will redirect to /login)
      return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -78,11 +77,7 @@ export function AuthRedirect({ children }: AuthRedirectProps) {
       </div>
     );
   }
-
+  
   // If none of the above loading/redirecting conditions are met, render the children.
-  // This means:
-  // - User is on /login and not logged in (show login form)
-  // - User is on /chat and logged in (show chat page)
-  // - User is on other pages and auth state is appropriate for that page
   return <>{children}</>;
 }
