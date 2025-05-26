@@ -20,14 +20,15 @@ export async function searchUsersAction(
   formData: FormData
 ): Promise<SearchUsersActionState> {
   const rawSearchTerm = formData.get("searchTerm");
-  const currentUserId = formData.get("currentUserId") as string | null;
+  const currentUserId = formData.get("currentUserId") as string | null; // Read from hidden input
 
   if (typeof rawSearchTerm !== 'string') {
     return { error: "Invalid search term." };
   }
 
   if (!currentUserId) {
-    return { error: "You must be logged in to search users. User identifier is missing." };
+    // This check is important. UserSearch.tsx should ensure currentUserId is passed.
+    return { error: "User identifier (currentUserId) is missing from the form data. You must be logged in to search users." };
   }
 
   const validationResult = SearchUsersSchema.safeParse({ searchTerm: rawSearchTerm });
@@ -46,7 +47,9 @@ export async function searchUsersAction(
     const users = await fbSearchUsersByUsername(searchTerm, currentUserId);
     return { users, searchTerm };
   } catch (error: any) {
-    console.error("Error in searchUsersAction:", error);
-    return { error: error.message || "Failed to search for users.", searchTerm };
+    // Log the detailed error message received from fbSearchUsersByUsername
+    console.error("Error in searchUsersAction:", error.message, error); 
+    // Pass the potentially more detailed error message to the client
+    return { error: error.message || "User search action failed. Please check server logs for more details.", searchTerm };
   }
 }
